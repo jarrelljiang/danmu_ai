@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta charset="utf-8" />
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
+        <style>
+            .wrap {
+                position: relative;
+                width: 50%;
+                margin: 0 auto;
+            }
+            video {
+                width: 100%;
+                height: 100%;
+            }
+            .danmaku {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 80%;
+                mask-repeat: no-repeat;
+                mask-size: cover;
+                z-index: 2;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="wrap">
+            <video id="video" src="./demo2.mp4" controls></video>
+            <div class="danmaku">
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+                你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好你好
+            </div>
+        </div>
+
+        <canvas id="output"></canvas>
+        <script>
+            let model;
+
+            async function detectFaces() {
+                const predictions = await model.estimateFaces(video);
+
+                const canvas = document.getElementById("output");
+                const ctx = canvas.getContext("2d");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // 将整个画布填充为白色
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                if (predictions.length > 0) {
+                    predictions.forEach(prediction => {
+                        let keypoints = prediction.scaledMesh;
+                        const faceOutlineIndices = [
+                            10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
+                            361, 288, 397, 365, 379, 378, 400, 377, 152, 148,
+                            176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162,
+                            21, 54, 103, 67, 109,
+                        ];
+                        // 绘制脸部外轮廓，将这些点连接起来
+                        ctx.beginPath();
+                        const startPoint = keypoints[faceOutlineIndices[0]];
+                        ctx.moveTo(startPoint[0], startPoint[1]);
+
+                        // 按顺序连接外轮廓点
+                        for (let i = 1; i < faceOutlineIndices.length; i++) {
+                            const point = keypoints[faceOutlineIndices[i]];
+                            ctx.lineTo(point[0], point[1]);
+                        }
+                        ctx.closePath();
+                        ctx.clip(); // 将这条路径作为裁剪路径
+
+                        // 清除人脸区域，使其透明
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    });
+                }
+
+                // 生成的mask图像可以转为DataURL，用于CSS
+                const maskDataUrl = canvas.toDataURL();
+                document.querySelector(
+                    ".danmaku"
+                ).style.maskImage = `url(${maskDataUrl})`;
+
+                requestAnimationFrame(detectFaces);
+            }
+
+            async function loadModel() {
+                model = await facemesh.load();
+                console.log("FaceMesh model loaded");
+                detectFaces();
+            }
+
+            video.addEventListener("play", function () {
+                loadModel();
+                console.log("视频播放");
+            });
+        </script>
+    </body>
+</html>

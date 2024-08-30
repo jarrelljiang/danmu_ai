@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta charset="utf-8" />
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
+        <style>
+            .wrap {
+                position: relative;
+                width: 640px;
+                margin: 0 auto;
+                .dot {
+                    position: absolute;
+                    width: 4px;
+                    height: 4px;
+                    border-radius: 50%;
+                    background-color: red;
+                }
+            }
+            video {
+                width: 640px;
+                height: 360px;
+            }
+            .danmaku {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 80%;
+                mask-repeat: no-repeat;
+                mask-size: cover;
+                z-index: 2;
+            }
+            #loading {
+                position: fixed;
+                top: 0;
+                left: 0;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h3 id="loading">模型加载中......</h3>
+        <div class="wrap">
+            <video id="video" src="./demo2.mp4" controls></video>
+            <div class="danmaku"></div>
+        </div>
+
+        <canvas id="output"></canvas>
+        <script>
+            let model;
+            let arr;
+            let isPlay = false;
+            async function detectFaces() {
+                const predictions = await model.estimateFaces(video);
+
+                const canvas = document.getElementById("output");
+                const ctx = canvas.getContext("2d");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // 将整个画布填充为白色
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                if (predictions.length > 0) {
+                    predictions.forEach(prediction => {
+                        arr = prediction.scaledMesh;
+                        const faceOutlineIndices = [
+                            10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
+                            361, 288, 397, 365, 379, 378, 400, 377, 152, 148,
+                            176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162,
+                            21, 54, 103, 67, 109,
+                        ];
+                        arr = arr.filter((item, index) =>
+                            faceOutlineIndices.includes(index)
+                        );
+                    });
+                }
+
+                if (isPlay) {
+                    let doms = document.querySelectorAll(".dot");
+                    if (doms.length > 0) {
+                        doms.forEach((dot, index) => {
+                            dot.style.left = arr[index][0] + "px";
+                            dot.style.top = arr[index][1] + "px";
+                        });
+                    } else {
+                        arr.forEach((item, index) => {
+                            let dot = document.createElement("div");
+                            dot.className = "dot";
+                            document.querySelector(".wrap").appendChild(dot);
+                            dot.style.left = item[0] + "px";
+                            dot.style.top = item[1] + "px";
+                        });
+                    }
+                }
+                requestAnimationFrame(detectFaces);
+            }
+
+            async function loadModel() {
+                model = await facemesh.load();
+                loading.innerText = "模型加载完成!";
+                detectFaces();
+            }
+            loadModel();
+            video.addEventListener("play", function () {
+                isPlay = true;
+            });
+        </script>
+    </body>
+</html>
