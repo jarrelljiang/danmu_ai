@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta charset="utf-8" />
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh"></script>
+        <style>
+            .wrap {
+                position: relative;
+                width: 50%;
+                margin: 0 auto;
+                .dot {
+                    position: absolute;
+                    width: 4px;
+                    height: 4px;
+                    border-radius: 50%;
+                    background-color: red;
+                }
+            }
+            video {
+                width: 100%;
+                height: 100%;
+            }
+            .danmaku {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 90%;
+                mask-repeat: no-repeat;
+                mask-size: cover;
+                z-index: 2;
+                overflow: hidden;
+                span {
+                    position: absolute;
+                    font-size: 20px;
+                    color: #fff;
+                    font-weight: bold;
+                    white-space: nowrap;
+                }
+            }
+            .item {
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h3 id="loading">模型加载中......</h3>
+        <form id="myForm">
+            <input type="radio" name="face" value="showAll" />人脸识别
+            <input type="radio" name="face" value="showBoundary" />人脸轮廓
+        </form>
+        <div class="item">
+            <input type="checkbox" onchange="changeDanmu()" />开启弹幕
+        </div>
+
+        <div class="wrap">
+            <video id="video" src="./demo2.mp4" controls></video>
+            <div class="danmaku" id="danmaku"></div>
+        </div>
+
+        <canvas id="output"></canvas>
+        <script>
+            let model;
+            let showAll = false;
+            let showBoundary = false;
+            let showDanmu = false;
+            let timer = null;
+            let width;
+            let height;
+            const clearDot = () => {
+                let doms = document.querySelectorAll(".dot");
+                doms.forEach(dom => {
+                    dom.remove();
+                });
+            };
+            const changeDanmu = () => {
+                clearDot();
+                showDanmu = !showDanmu;
+                if (showDanmu) {
+                    timer = setInterval(() => {
+                        let n = parseInt(Math.random() * 10);
+                        for (let i = 0; i < n; i++) {
+                            danmu.draw();
+                        }
+                    }, 500);
+                } else {
+                    clearInterval(timer);
+                    let danmuItems = document.querySelectorAll(".danmaku span");
+                    danmuItems.forEach(item => {
+                        item.remove();
+                    });
+                }
+            };
+            document
+                .getElementById("myForm")
+                .addEventListener("change", function (e) {
+                    clearDot();
+                    if (
+                        e.target.type === "radio" &&
+                        e.target.value === "showAll"
+                    ) {
+                        showAll = true;
+                        showBoundary = false;
+                    } else if (
+                        e.target.type === "radio" &&
+                        e.target.value === "showBoundary"
+                    ) {
+                        showAll = false;
+                        showBoundary = true;
+                    }
+                });
+
+            async function detectFaces() {
+                const predictions = await model.estimateFaces(video);
+
+                const canvas = document.getElementById("output");
+                const ctx = canvas.getContext("2d");
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+
+                // 将整个画布填充为白色
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                if (showDanmu) {
+                    if (predictions.length > 0) {
+                        predictions.forEach(prediction => {
+                            const keypoints = prediction.scaledMesh;
+
+                            // 计算面部中心
+                            const faceCenter = keypoints
+                                .reduce(
+                                    (acc, point) => [
+                                        acc[0] + point[0],
+                                        acc[1] + point[1],
+                                    ],
+                                    [0, 0]
+                                )
+                                .map(coord => coord / keypoints.length);
+
+                            // 放大比例系数，可以调整大小，1.1表示放大10%
+                            const scaleFactor = 1.2;
+
+                            // 面部外轮廓的索引
+                            const faceOutlineIndices = [
+                                10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
+                                361, 288, 397, 365, 379, 378, 400, 377, 152,
+                                148, 176, 149, 150, 136, 172, 58, 132, 93, 234,
+                                127, 162, 21, 54, 103, 67, 109,
+                            ];
+
+                            // 绘制放大后的脸部外轮廓
+                            ctx.beginPath();
+                            const startPoint = keypoints[faceOutlineIndices[0]];
+                            const scaledStartPoint = [
+                                faceCenter[0] +
+                                    (startPoint[0] - faceCenter[0]) *
+                                        scaleFactor,
+                                faceCenter[1] +
+                                    (startPoint[1] - faceCenter[1]) *
+                                        scaleFactor,
+                            ];
+                            ctx.moveTo(
+                                scaledStartPoint[0],
+                                scaledStartPoint[1]
+                            );
+
+                            for (
+                                let i = 1;
+                                i < faceOutlineIndices.length;
+                                i++
+                            ) {
+                                const point = keypoints[faceOutlineIndices[i]];
+                                const scaledPoint = [
+                                    faceCenter[0] +
+                                        (point[0] - faceCenter[0]) *
+                                            scaleFactor,
+                                    faceCenter[1] +
+                                        (point[1] - faceCenter[1]) *
+                                            scaleFactor,
+                                ];
+                                ctx.lineTo(scaledPoint[0], scaledPoint[1]);
+                            }
+
+                            ctx.closePath();
+                            ctx.clip();
+
+                            // 清除人脸区域，使其透明
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        });
+                    }
+
+                    // 生成的mask图像可以转为DataURL，用于CSS
+                    const maskDataUrl = canvas.toDataURL();
+                    document.querySelector(
+                        ".danmaku"
+                    ).style.maskImage = `url(${maskDataUrl})`;
+                } else if (showBoundary) {
+                    if (predictions.length > 0) {
+                        predictions.forEach(prediction => {
+                            arr = prediction.scaledMesh;
+                            const faceOutlineIndices = [
+                                10, 338, 297, 332, 284, 251, 389, 356, 454, 323,
+                                361, 288, 397, 365, 379, 378, 400, 377, 152,
+                                148, 176, 149, 150, 136, 172, 58, 132, 93, 234,
+                                127, 162, 21, 54, 103, 67, 109,
+                            ];
+                            arr = arr.filter((item, index) =>
+                                faceOutlineIndices.includes(index)
+                            );
+                        });
+                    }
+                    let doms = document.querySelectorAll(".dot");
+                    if (doms.length > 0) {
+                        doms.forEach((dot, index) => {
+                            let left = arr[index][0] * (width / 640) + "px";
+                            let top = arr[index][1] * (height / 360) + "px";
+                            dot.style.left = left;
+                            dot.style.top = top;
+                        });
+                    } else {
+                        arr.forEach((item, index) => {
+                            let dot = document.createElement("div");
+                            dot.className = "dot";
+                            document.querySelector(".wrap").appendChild(dot);
+                            let left = arr[index][0] * (width / 640) + "px";
+                            let top = arr[index][1] * (height / 360) + "px";
+                            dot.style.left = left;
+                            dot.style.top = top;
+                        });
+                    }
+                } else if (showAll) {
+                    if (predictions.length > 0) {
+                        predictions.forEach(prediction => {
+                            arr = prediction.scaledMesh;
+                        });
+                    }
+                    let doms = document.querySelectorAll(".dot");
+                    if (doms.length > 0) {
+                        doms.forEach((dot, index) => {
+                            let left = arr[index][0] * (width / 640) + "px";
+                            let top = arr[index][1] * (height / 360) + "px";
+                            dot.style.left = left;
+                            dot.style.top = top;
+                        });
+                    } else {
+                        arr.forEach((item, index) => {
+                            let dot = document.createElement("div");
+                            dot.className = "dot";
+                            document.querySelector(".wrap").appendChild(dot);
+                            let left = arr[index][0] * (width / 640) + "px";
+                            let top = arr[index][1] * (height / 360) + "px";
+                            dot.style.left = left;
+                            dot.style.top = top;
+                        });
+                    }
+                }
+
+                requestAnimationFrame(detectFaces);
+            }
+
+            async function loadModel() {
+                model = await facemesh.load();
+                loading.innerText = "模型加载完成!";
+                width = video.offsetWidth;
+                height = video.offsetHeight;
+                detectFaces();
+            }
+
+            class Danmu {
+                constructor() {
+                    this.width = danmaku.offsetWidth;
+                    this.height = danmaku.offsetHeight;
+                }
+
+                draw() {
+                    let span = document.createElement("span");
+                    span.innerText = `弹幕${parseInt(Math.random() * 1000)}`;
+                    let speed = Math.random() * (5 - 3) + 3;
+                    span.style.transition = `${speed}s linear`;
+                    danmaku.appendChild(span);
+
+                    span.style.left = this.width + "px";
+                    span.style.top = Math.random() * (this.height - 20) + "px";
+                    let spanWidth = span.offsetWidth;
+                    setTimeout(() => {
+                        span.style.left = -spanWidth + "px";
+                    });
+                    setTimeout(() => {
+                        span.remove();
+                    }, speed * 1000);
+                }
+            }
+            let danmu = new Danmu();
+
+            loadModel();
+            video.addEventListener("play", function () {});
+        </script>
+    </body>
+</html>
